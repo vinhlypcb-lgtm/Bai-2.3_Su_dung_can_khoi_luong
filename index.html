@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bài 2.3 - Sử dụng cân đo khối lượng (độ đọc 10 mg)</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Tahoma,sans-serif;background:#1a1a2e;color:#fff}
+#container{display:flex;height:100vh;width:100vw}
+#cc{flex:1;position:relative;background:radial-gradient(circle,#2a2a4a 0%,#0f0f1a 100%);min-height:420px}
+#title{position:absolute;top:12px;left:12px;z-index:10;background:rgba(0,0,0,.7);padding:8px 14px;border-radius:8px}
+#title h1{font-size:1.1rem;color:#4ecca3}#title p{font-size:.8rem;color:#aaa}
+#zoomwrap{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);width:min(940px,calc(100% - 20px));z-index:10;background:rgba(0,0,0,.8);border:2px solid #4ecca3;border-radius:8px;padding:6px 8px}
+#zoomwrap .zt{display:flex;justify-content:space-between;font-size:.8rem;color:#4ecca3;margin-bottom:4px}
+#zoomwrap label{display:inline;color:#ccc;font-weight:normal;font-size:.8rem}
+#zoomwrap input{width:auto}
+#zoom{width:100%;height:230px;display:block;border-radius:4px;touch-action:none;cursor:pointer}
+#panel{width:390px;background:#16213e;border-left:2px solid #0f3460;padding:16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+h2{font-size:1rem;color:#e94560;border-bottom:2px solid #e94560;padding-bottom:4px;text-transform:uppercase;margin-top:6px}
+label{display:block;margin-bottom:4px;font-size:.85rem;color:#4ecca3;font-weight:bold}
+select,input,button{width:100%;padding:8px;border-radius:4px;border:1px solid transparent;background:#0f3460;color:#fff;font-size:.9rem;outline:none}
+input[type=range]{accent-color:#e94560;padding:0}
+button{background:#e94560;font-weight:bold;cursor:pointer}
+button:hover:not(:disabled){background:#ff6b81}
+button:disabled,input:disabled{opacity:.4;cursor:not-allowed}
+.sl{display:flex;align-items:center;gap:6px}.sl button{width:34px;padding:4px;background:#0f3460}
+.ins{font-size:.8rem;line-height:1.4;color:#ccc;background:#1a1a2e;padding:8px;border-radius:4px}
+.chip{font-size:.85rem;padding:5px 8px;border-radius:4px;background:#1a1a2e;text-align:center;color:#aaa}
+.chip.on{color:#2ecc71;border:1px solid #2ecc71}
+#msg{font-size:.85rem;min-height:1.2em}.good{color:#2ecc71}.warn{color:#ffb142}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th,td{border:1px solid #0f3460;padding:5px;text-align:center}th{background:#1a1a2e;color:#4ecca3}
+.row{display:flex;align-items:center;gap:6px;margin:4px 0}.row span{white-space:nowrap;font-size:.85rem}
+.ok{border-color:#2ecc71!important;background:#14532d!important}.bad{border-color:#e94560!important;background:#5a1a2a!important}
+#calc.lock{opacity:.35;pointer-events:none}
+details{font-size:.8rem;color:#ccc;background:#1a1a2e;border-radius:4px;padding:6px 8px;margin:4px 0;line-height:1.5}
+#final{font-size:1.05rem;font-weight:bold;text-align:center;padding:8px;border:1px solid #e94560;border-radius:6px;margin-top:6px}
+@media(max-width:900px){#container{flex-direction:column;height:auto}#cc{flex:none;height:85vh}#panel{width:100%}}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+<div id="container">
+ <div id="cc">
+  <div id="title"><h1>THÍ NGHIỆM CÂN KHỐI LƯỢNG 3D</h1><p>Bài 2.3: Cân vật 3 lần, khoảng đo 311 g, độ đọc 10 mg</p></div>
+  <div id="zoomwrap">
+   <div class="zt"><span>Bốn thang gia trọng (kéo con chạy trên canvas hoặc dùng thanh trượt) và chỉ thị cân bằng</span><span><input type="checkbox" id="hint"> <label for="hint">Hiện số từng thang</label></span></div>
+   <canvas id="zoom"></canvas>
+  </div>
+ </div>
+ <div id="panel">
+  <h2>1. Chọn vật cần cân</h2>
+  <select id="mode">
+   <option value="weight">Bảng 6: Quả nặng</option>
+   <option value="phone">Bảng 7: Điện thoại</option>
+   <option value="watch">Bảng 7: Đồng hồ đeo tay</option>
+   <option value="calc">Bảng 7: Máy tính cầm tay</option>
+  </select>
+
+  <h2>2. Thao tác cân <span id="tag" style="color:#4ecca3"></span></h2>
+  <div class="ins" id="guide"></div>
+  <details><summary>Cách đọc số trên cân</summary>
+   m = m<sub>6.1</sub> + m<sub>6.2</sub> + m<sub>6.3</sub> + m<sub>6.4</sub> (g)<br>
+   6.1: hàng trăm (0–200 g) · 6.2: hàng chục (0–100 g)<br>
+   6.3: hàng đơn vị (0–10 g) · 6.4: hàng phần trăm (0–1 g)<br>
+   Điều chỉnh lần lượt từ 6.1 đến 6.4 đến khi hai vạch trắng (8) trùng nhau.
+  </details>
+  <button id="bZero">① Xác nhận cân đã về 0 (chưa đặt vật)</button>
+  <button id="bPlace">② Đặt vật lên đĩa cân</button>
+  <div id="sliders"></div>
+  <div class="chip" id="chip">—</div>
+  <div>
+   <label for="readIn">Số đọc được m = m6.1 + m6.2 + m6.3 + m6.4 (g):</label>
+   <input type="number" id="readIn" step="0.01" placeholder="vd: 127.35">
+  </div>
+  <button id="bRec">④ Ghi kết quả vào bảng</button>
+  <button id="bOut">⑤ Lấy vật ra, đặt lại vị trí khác</button>
+  <div id="msg"></div>
+
+  <h2>3. Bảng số liệu <span id="tabName" style="color:#4ecca3"></span></h2>
+  <table>
+   <thead><tr><th>Lần</th><th>Vị trí vật trên đĩa</th><th>m<sub>i</sub> (g)</th></tr></thead>
+   <tbody>
+    <tr><td>1</td><td>giữa đĩa</td><td id="v0">---</td></tr>
+    <tr><td>2</td><td>lệch trái</td><td id="v1">---</td></tr>
+    <tr><td>3</td><td>lệch phải</td><td id="v2">---</td></tr>
+   </tbody>
+  </table>
+
+  <h2>4. Xử lý số liệu</h2>
+  <div id="calc" class="lock">
+   <div class="ins">Giá trị trung bình: <b>m̄ = (m₁ + m₂ + m₃) / 3</b></div>
+   <div class="row"><span>m̄ =</span><input id="cAvg" type="number" step="any"><span>g</span></div>
+   <div class="ins">Sai số tuyệt đối ứng với mỗi lần đo (tự tính):</div>
+   <div class="row"><span>Δm₁</span><input id="c1" type="number" step="any"><span>Δm₂</span><input id="c2" type="number" step="any"><span>Δm₃</span><input id="c3" type="number" step="any"></div>
+   <div class="ins">Sai số ngẫu nhiên (sai số tuyệt đối trung bình của 3 lần đo, tự tính):</div>
+   <div class="row"><span>Δm̄ =</span><input id="cDm" type="number" step="any"><span>g</span></div>
+   <div class="ins">Sai số của phép đo (tự tính):</div>
+   <div class="row"><span>Δm =</span><input id="cDA" type="number" step="any"><span>g</span></div>
+   <details><summary>Gợi ý công thức</summary>
+    Δmᵢ = |m̄ − mᵢ|<br>Δm̄ = (Δm₁ + Δm₂ + Δm₃) / 3<br>Δm = Δm̄ + Δm', với sai số dụng cụ Δm' = 0,01 g (độ đọc 10 mg của cân).<br>Viết kết quả: m = m̄ ± Δm, Δm tối đa 2 chữ số có nghĩa, m̄ viết đến bậc thập phân tương ứng.
+   </details>
+   <button id="bCheck">Kiểm tra kết quả</button>
+   <button id="bShow" style="background:#0f3460;margin-top:6px">Xem đáp án</button>
+   <div id="final" style="display:none"></div>
+  </div>
+  <button id="bReset" style="background:#0f3460">Làm lại từ đầu</button>
+ </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+// Khối lượng thật (g) ở 3 lần đo - sửa tại đây nếu muốn đổi số liệu
+const V={weight:[127.35,127.37,127.34],phone:[168.42,168.45,168.43],watch:[45.28,45.31,45.29],calc:[96.74,96.76,96.73]};
+const TAB={weight:'(Bảng 6)',phone:'(Bảng 7)',watch:'(Bảng 7)',calc:'(Bảng 7)'};
+const OFFX=[0,-9,9],TOL=0.0055,DC=0.01;
+const BEAMS=[{lab:'6.1 Hàng trăm (g)',max:200,step:100,col:'#ff6b6b'},
+             {lab:'6.2 Hàng chục (g)',max:100,step:10,col:'#ffa94d'},
+             {lab:'6.3 Hàng đơn vị (g)',max:10,step:1,col:'#ffe066'},
+             {lab:'6.4 Hàng phần trăm (g)',max:1,step:0.01,col:'#69db7c'}];
+let S={mode:'weight',t:0,stage:'zero',rd:[null,null,null],e0:0};
+let R=[0,0,0,0],Z=0;                       // R: vị trí 4 con chạy (g); Z: vít chỉnh số 0
+const tv=()=>V[S.mode][S.t];
+const loaded=()=>S.stage==='weigh'||S.stage==='recorded';
+const setMass=()=>Math.round((R[0]+R[1]+R[2]+R[3])*100)/100;
+const diff=()=>Math.round(((loaded()?tv():0)+S.e0+Z-setMass())*100)/100;  // >0: đĩa nặng hơn
+const balanced=()=>diff()===0;
+
+// ---------- THANH TRƯỢT (không hiện số) ----------
+const CFG=[{id:'sz',lab:'① Vít chỉnh số 0 (5.1)',min:-1,max:1,step:0.01}].concat(
+  BEAMS.map((b,i)=>({id:'s'+i,lab:'③ Gia trọng '+b.lab,min:0,max:b.max,step:b.step})));
+$('sliders').innerHTML=CFG.map(c=>`<div style="margin-bottom:6px"><label>${c.lab}</label><div class="sl"><button data-d="-1" data-i="${c.id}">◀</button><input type="range" id="${c.id}" min="${c.min}" max="${c.max}" step="${c.step}" value="0"><button data-d="1" data-i="${c.id}">▶</button></div></div>`).join('');
+document.querySelectorAll('.sl button').forEach(b=>b.onclick=()=>{
+  const el=$(b.dataset.i);el.value=Math.round((parseFloat(el.value)+b.dataset.d*parseFloat(el.step))*100)/100;apply();});
+document.querySelectorAll('.sl input').forEach(el=>el.addEventListener('input',apply));
+function apply(){Z=parseFloat($('sz').value);for(let i=0;i<4;i++)R[i]=parseFloat($('s'+i).value);place();draw();ui();}
+function setRiders(v){for(let i=0;i<4;i++)$('s'+i).value=v;}
+
+// ---------- THREE.JS ----------
+const cc=$('cc'),scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(45,cc.clientWidth/cc.clientHeight,0.1,2000);
+camera.position.set(20,45,255);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(cc.clientWidth,cc.clientHeight);cc.appendChild(renderer.domElement);
+const controls=new THREE.OrbitControls(camera,renderer.domElement);
+controls.target.set(20,15,0);controls.enableDamping=true;controls.update();
+scene.add(new THREE.AmbientLight(0xffffff,.65));
+const dl=new THREE.DirectionalLight(0xffffff,.8);dl.position.set(60,120,150);scene.add(dl);
+const dl2=new THREE.DirectionalLight(0x90e0ef,.4);dl2.position.set(-80,-30,-80);scene.add(dl2);
+const steel=new THREE.MeshStandardMaterial({color:0xc0c0c0,roughness:.3,metalness:.8});
+const dark=new THREE.MeshStandardMaterial({color:0x33383d,roughness:.5,metalness:.5});
+const white=new THREE.MeshBasicMaterial({color:0xffffff});
+const brass=new THREE.MeshStandardMaterial({color:0xb58900,roughness:.4,metalness:.6});
+const table=new THREE.Mesh(new THREE.PlaneGeometry(600,300),new THREE.MeshStandardMaterial({color:0x2c3e50}));
+table.rotation.x=-Math.PI/2;scene.add(table);
+function box(w,h,d,x,y,z,m,p){const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);p.add(o);return o;}
+box(230,6,50,15,3,0,dark,scene);                 // đế cân
+box(12,72,12,0,42,0,steel,scene);                // trụ giữ cân (9)
+box(14,18,1,125,71,-3,dark,scene);               // tấm chỉ thị cố định
+box(10,1.2,3,125,71,3.5,white,scene);            // vạch trắng cố định (8)
+const beam=new THREE.Group();beam.position.set(0,75,0);scene.add(beam);
+box(190,6,6,30,0,0,steel,beam);                  // cán đòn cân bằng (5), x từ -65 đến 125
+box(10,1.2,3,125,-4,0,white,beam);               // vạch trắng chuyển động
+const rider=BEAMS.map((b,i)=>{
+  box(100,1.6,3,60,-8-6*i,0,steel,beam);         // đường ray
+  return box(5,5,7,10,-8-6*i-3,0,new THREE.MeshStandardMaterial({color:b.col}),beam);});
+const pan=new THREE.Group();scene.add(pan);
+const disc=new THREE.Mesh(new THREE.CylinderGeometry(30,30,2,48),steel);disc.position.y=-1;pan.add(disc);
+const rod=new THREE.Mesh(new THREE.CylinderGeometry(.8,.8,46,8),steel);rod.position.y=23;pan.add(rod);
+
+// Vật cần cân (đáy tại y = 0)
+const obj=new THREE.Group();scene.add(obj);let hh=7;
+function build(){
+  while(obj.children.length){const c=obj.children[0];obj.remove(c);c.geometry.dispose();}
+  const add=(g,m,y,rx)=>{const o=new THREE.Mesh(g,m);o.position.y=y;if(rx)o.rotation.x=rx;obj.add(o);};
+  if(S.mode==='weight'){add(new THREE.CylinderGeometry(8,8,14,32),brass,7);hh=14;}
+  else if(S.mode==='phone'){add(new THREE.BoxGeometry(16,1.8,8),dark,.9);add(new THREE.BoxGeometry(14.5,.2,7),new THREE.MeshStandardMaterial({color:0x0a2a4a}),1.85);hh=2;}
+  else if(S.mode==='watch'){add(new THREE.TorusGeometry(7,1.8,12,32),steel,1.8,Math.PI/2);add(new THREE.CylinderGeometry(5.5,5.5,1.5,32),new THREE.MeshStandardMaterial({color:0xf5f5f5}),1.8);hh=4;}
+  else{add(new THREE.BoxGeometry(14,2.4,9),new THREE.MeshStandardMaterial({color:0x8a8f94}),1.2);hh=2.4;}
+}
+const tablePose=()=>new THREE.Vector3(110,0,50);
+const panX=()=>-65+OFFX[S.t];
+let theta=0;
+function place(){                                  // cập nhật con chạy, vị trí đĩa
+  rider.forEach((r,i)=>r.position.x=10+100*R[i]/BEAMS[i].max);
+  const e=-65*Math.cos(theta),y=75-65*Math.sin(theta);
+  beam.rotation.z=theta;pan.position.set(e,y-46,0);
+  if(loaded())obj.position.set(e+OFFX[S.t],y-46,0);
+}
+let path=[],onDone=null;
+const go=(p,cb)=>{path=p;onDone=cb;};
+
+// ---------- CANVAS: 4 THANG GIA TRỌNG + CHỈ THỊ ----------
+const zc=$('zoom'),cx=zc.getContext('2d');
+const geo=()=>{const W=zc.clientWidth,H=zc.clientHeight;return{W,H,x0:175,Lw:W-175-195,rh:(H-10)/4};};
+function draw(){
+  const g=geo();zc.width=g.W;zc.height=g.H;const {W,H,x0,Lw,rh}=g;
+  cx.fillStyle='#1b2430';cx.fillRect(0,0,W,H);
+  BEAMS.forEach((b,i)=>{
+    const top=5+rh*i,yb=top+22;
+    cx.fillStyle=b.col;cx.font='bold 12px Arial';cx.textAlign='left';cx.fillText(b.lab,8,yb+4);
+    cx.fillStyle='#6b7280';cx.fillRect(x0-6,yb,Lw+12,5);
+    const unit=i==3?0.01:b.step,N=Math.round(b.max/unit);
+    cx.strokeStyle='#e5e7eb';cx.fillStyle='#e5e7eb';cx.lineWidth=1;cx.textAlign='center';cx.font='11px Arial';
+    for(let k=0;k<=N;k++){
+      const x=x0+Lw*k/N,major=i==3?k%10==0:true;
+      cx.beginPath();cx.moveTo(x,yb+5);cx.lineTo(x,yb+5+(major?11:5));cx.stroke();
+      if(major)cx.fillText(i==3?(k/100).toFixed(1):k*unit,x,yb+30);
+    }
+    const xr=x0+Lw*R[i]/b.max;
+    cx.fillStyle=b.col;cx.beginPath();cx.moveTo(xr-8,yb-18);cx.lineTo(xr+8,yb-18);cx.lineTo(xr,yb-1);cx.closePath();cx.fill();
+    cx.strokeStyle=b.col;cx.lineWidth=2;cx.beginPath();cx.moveTo(xr,yb);cx.lineTo(xr,yb+16);cx.stroke();
+    if($('hint').checked){cx.fillStyle='#fff';cx.textAlign='left';cx.font='bold 12px Arial';cx.fillText('= '+(i==3?R[i].toFixed(2):R[i]),xr+12,yb-6);}
+  });
+  // chỉ thị cân bằng (8)
+  const d=diff(),off=Math.sign(d)*Math.min(55,22*Math.sqrt(Math.abs(d))),cxm=W-100,cy=H/2+5,ok=d===0;
+  cx.fillStyle='#e5e7eb';cx.font='bold 12px Arial';cx.textAlign='center';cx.fillText('(8) Hai vạch trắng',cxm,18);
+  cx.fillStyle='#10151c';cx.fillRect(cxm-70,32,140,H-50);
+  cx.strokeStyle=ok?'#2ecc71':'#e94560';cx.lineWidth=2;cx.strokeRect(cxm-70,32,140,H-50);
+  cx.strokeStyle='#fff';cx.lineWidth=3;
+  cx.beginPath();cx.moveTo(cxm-60,cy);cx.lineTo(cxm-8,cy);cx.stroke();          // vạch cố định
+  cx.beginPath();cx.moveTo(cxm+8,cy-off);cx.lineTo(cxm+60,cy-off);cx.stroke();  // vạch chuyển động
+  cx.fillStyle=ok?'#2ecc71':'#aaa';cx.font='12px Arial';cx.fillText(ok?'TRÙNG NHAU':'chưa trùng',cxm,H-12);
+}
+let drag=-1;
+function dragTo(e){const g=geo(),r=zc.getBoundingClientRect(),b=BEAMS[drag];
+  let f=Math.min(1,Math.max(0,(e.clientX-r.left-g.x0)/g.Lw));
+  $('s'+drag).value=Math.round(Math.round(f*b.max/b.step)*b.step*100)/100;apply();}
+zc.addEventListener('pointerdown',e=>{
+  if(S.stage!=='weigh')return;const g=geo(),r=zc.getBoundingClientRect();
+  const i=Math.floor((e.clientY-r.top-5)/g.rh);if(i<0||i>3)return;
+  drag=i;zc.setPointerCapture(e.pointerId);dragTo(e);});
+zc.addEventListener('pointermove',e=>{if(drag>=0)dragTo(e);});
+zc.addEventListener('pointerup',()=>drag=-1);
+$('hint').addEventListener('change',draw);
+
+// ---------- LOGIC ----------
+const msg=(t,c)=>{$('msg').textContent=t;$('msg').className=c||'';};
+function ui(){
+  const st=S.stage,done=S.rd.every(x=>x!==null),bal=balanced(),d=diff();
+  $('tag').textContent=`— lần cân ${S.t+1}/3`;$('tabName').textContent=TAB[S.mode];
+  $('bZero').disabled=!(st==='zero'&&bal);
+  $('bPlace').disabled=st!=='table';
+  $('sz').disabled=st!=='zero';
+  for(let i=0;i<4;i++)$('s'+i).disabled=st!=='weigh';
+  document.querySelectorAll('.sl button').forEach(b=>b.disabled=$(b.dataset.i).disabled);
+  $('readIn').disabled=st!=='weigh';
+  $('bRec').disabled=!(st==='weigh'&&bal);
+  $('bOut').disabled=st!=='recorded';
+  $('bOut').textContent=S.t<2?'⑤ Lấy vật ra, đặt lại vị trí khác':'⑤ Lấy vật ra (hoàn tất 3 lần cân)';
+  let g='';
+  if(st==='zero')g='Chưa đặt vật. Dùng vít chỉnh số 0 (5.1) cho đến khi hai vạch trắng (8) trùng nhau (cân về 0), rồi bấm ①.';
+  else if(st==='table')g=`Cân đã về 0. Bấm ② để đặt vật lên đĩa (lần ${S.t+1}: vật đặt ${['giữa đĩa','lệch trái','lệch phải'][S.t]}).`;
+  else if(st==='moving')g='Đang di chuyển vật...';
+  else if(st==='weigh')g=bal?'Hai vạch trắng đã trùng nhau. Cộng số đọc của 4 thang (6.1 + 6.2 + 6.3 + 6.4), nhập vào ô rồi bấm ④.':'Chỉnh lần lượt gia trọng từ 6.1 (hàng trăm) đến 6.4 (hàng phần trăm) đến khi hai vạch trắng trùng nhau.';
+  else if(st==='recorded')g='Đã ghi kết quả. Bấm ⑤ để lấy vật ra (các gia trọng trở về 0) rồi cân lại ở vị trí khác.';
+  else g='Đã cân xong 3 lần. Hãy xử lý số liệu ở mục 4.';
+  $('guide').textContent=g;
+  const c=$('chip');
+  if(st==='zero'||st==='weigh'){c.textContent=bal?'✔ Cân thăng bằng — hai vạch trắng trùng nhau':(d>0?'⬇ Đĩa cân còn nặng hơn → tăng gia trọng':'⬆ Gia trọng đang quá nặng → lùi lại');c.className='chip'+(bal?' on':'');}
+  else{c.textContent='—';c.className='chip';}
+  for(let i=0;i<3;i++)$('v'+i).textContent=S.rd[i]===null?'---':S.rd[i].toFixed(2);
+  $('calc').classList.toggle('lock',!done);
+}
+$('bZero').onclick=()=>{S.stage='table';msg('✔ Đã chỉnh số 0.','good');ui();};
+$('bPlace').onclick=()=>{S.stage='moving';msg('');ui();
+  go([new THREE.Vector3(panX(),62,0),new THREE.Vector3(panX(),29,0)],()=>{S.stage='weigh';place();draw();ui();});};
+$('bRec').onclick=()=>{
+  const v=parseFloat($('readIn').value);
+  if(isNaN(v)){msg('Hãy nhập số đọc được vào ô trước.','warn');return;}
+  if(Math.abs(v-tv())>0.005){msg(`Số bạn nhập (${v}) chưa khớp tổng 4 thang. Cộng lại: m6.1 + m6.2 + m6.3 + m6.4.`,'warn');return;}
+  S.rd[S.t]=v;S.stage='recorded';msg(`✔ Đã ghi lần ${S.t+1}: ${v.toFixed(2)} g`,'good');ui();draw();};
+$('bOut').onclick=()=>{
+  const p=obj.position.clone();S.stage='moving';setRiders(0);Z=parseFloat($('sz').value);R=[0,0,0,0];
+  place();draw();ui();
+  go([new THREE.Vector3(p.x,62,0),tablePose()],()=>{
+    if(S.t<2){S.t++;S.stage='table';build();obj.position.copy(tablePose());$('readIn').value='';msg('');}
+    else{S.stage='done';msg('Hoàn tất 3 lần cân!','good');}
+    ui();draw();});};
+$('mode').onchange=reset;$('bReset').onclick=reset;
+function reset(){
+  const s=Math.random()<.5?-1:1;
+  S={mode:$('mode').value,t:0,stage:'zero',rd:[null,null,null],e0:s*Math.round((0.25+Math.random()*0.6)*100)/100};
+  path=[];onDone=null;$('sz').value=0;setRiders(0);Z=0;R=[0,0,0,0];theta=0;
+  build();obj.position.copy(tablePose());
+  ['readIn','cAvg','c1','c2','c3','cDm','cDA'].forEach(i=>{$(i).value='';$(i).classList.remove('ok','bad');});
+  $('final').style.display='none';msg('');apply();}
+
+// ---------- XỬ LÝ SỐ LIỆU ----------
+function expected(){const a=S.rd,avg=(a[0]+a[1]+a[2])/3,di=a.map(x=>Math.abs(avg-x)),dm=(di[0]+di[1]+di[2])/3;
+  return{avg,di,dm,dA:dm+DC};}
+function check(){
+  const e=expected(),pairs=[['cAvg',e.avg],['c1',e.di[0]],['c2',e.di[1]],['c3',e.di[2]],['cDm',e.dm],['cDA',e.dA]];
+  let all=true;
+  pairs.forEach(([id,x])=>{const el=$(id),v=parseFloat(el.value),ok=!isNaN(v)&&Math.abs(v-x)<=TOL;
+    el.classList.toggle('ok',ok);el.classList.toggle('bad',!ok);if(!ok)all=false;});
+  const f=$('final');f.style.display='block';
+  if(all){const dec=Math.max(0,1-Math.floor(Math.log10(e.dA)));
+    f.textContent=`m = ${e.avg.toFixed(dec)} ± ${e.dA.toFixed(dec)} g`;}
+  else f.textContent='Còn ô chưa đúng (viền đỏ). Tính lại nhé!';
+}
+$('bCheck').onclick=check;
+$('bShow').onclick=()=>{const e=expected();
+  $('cAvg').value=e.avg.toFixed(4);$('c1').value=e.di[0].toFixed(4);$('c2').value=e.di[1].toFixed(4);
+  $('c3').value=e.di[2].toFixed(4);$('cDm').value=e.dm.toFixed(4);$('cDA').value=e.dA.toFixed(4);check();};
+
+reset();
+(function animate(){
+  requestAnimationFrame(animate);
+  const d=diff(),tt=Math.sign(d)*Math.min(0.14,0.045*Math.sqrt(Math.abs(d)));
+  if(Math.abs(tt-theta)>1e-5){theta+=(tt-theta)*0.12;place();}
+  if(path.length){const t=path[0],dv=t.clone().sub(obj.position),l=dv.length();
+    if(l<=3){obj.position.copy(t);path.shift();if(!path.length&&onDone){const f=onDone;onDone=null;f();}}
+    else obj.position.add(dv.setLength(3));}
+  controls.update();renderer.render(scene,camera);
+})();
+window.addEventListener('resize',()=>{
+  camera.aspect=cc.clientWidth/cc.clientHeight;camera.updateProjectionMatrix();
+  renderer.setSize(cc.clientWidth,cc.clientHeight);draw();});
+</script>
+</body>
+</html>
